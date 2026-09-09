@@ -16,6 +16,68 @@ async function connectDB() {
   console.log('✅ متصل بقاعدة بيانات MongoDB');
 }
 
+
+async function sendMessengerReply(senderId, text) {
+  try {
+    const url = 'https://graph.facebook.com/v20.0/me/messages?access_token=' + process.env.PAGE_ACCESS_TOKEN;
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipient: { id: senderId },
+        message: { text: text }
+      })
+    });
+  } catch (e) {
+    console.error('فشل إرسال الرد:', e.message);
+  }
+}
+
+function generateSmartReply(messageText) {
+  const msg = messageText.toLowerCase();
+  if (msg.includes('سلام') || msg.includes('صباح') || msg.includes('مرحبا') || msg.includes('اهلا')) {
+    return 'أهلاً وسهلاً بيك 👋 شكراً لتواصلك معنا. كيفاش نقدر نعاونك اليوم؟';
+  }
+  if (msg.includes('سعر') || msg.includes('ثمن') || msg.includes('بشحال')) {
+    return 'شكراً على اهتمامك! راح نتصلو بيك قريباً باش نعطيوك كل التفاصيل على السعر والمنتج 💰';
+  }
+  if (msg.includes('طلب') || msg.includes('نحب نشري') || msg.includes('نبغي')) {
+    return 'تم استلام طلبك بنجاح ✅ فريقنا راح يتواصل معاك في أقرب وقت لتأكيد الطلب.';
+  }
+  return 'شكراً لرسالتك 🙏 توصلنا بيها وراح نرد عليك في أقرب وقت ممكن.';
+}
+
+
+async function sendMessengerReply(senderId, text) {
+  try {
+    const url = 'https://graph.facebook.com/v20.0/me/messages?access_token=' + process.env.PAGE_ACCESS_TOKEN;
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipient: { id: senderId },
+        message: { text: text }
+      })
+    });
+  } catch (e) {
+    console.error('فشل إرسال الرد:', e.message);
+  }
+}
+
+function generateSmartReply(messageText) {
+  const msg = messageText.toLowerCase();
+  if (msg.includes('سلام') || msg.includes('صباح') || msg.includes('مرحبا') || msg.includes('اهلا')) {
+    return 'أهلاً وسهلاً بيك 👋 شكراً لتواصلك معنا. كيفاش نقدر نعاونك اليوم؟';
+  }
+  if (msg.includes('سعر') || msg.includes('ثمن') || msg.includes('بشحال')) {
+    return 'شكراً على اهتمامك! راح نتصلو بيك قريباً باش نعطيوك كل التفاصيل على السعر والمنتج 💰';
+  }
+  if (msg.includes('طلب') || msg.includes('نحب نشري') || msg.includes('نبغي')) {
+    return 'تم استلام طلبك بنجاح ✅ فريقنا راح يتواصل معاك في أقرب وقت لتأكيد الطلب.';
+  }
+  return 'شكراً لرسالتك 🙏 توصلنا بيها وراح نرد عليك في أقرب وقت ممكن.';
+}
+
 const app = express();
 
 app.use(express.json());
@@ -658,7 +720,50 @@ app.get('/', async (req, res) => {
 });
 
 connectDB().then(() => {
-  app.listen(5000, () => {
+  
+// ===== استقبال طلبات المتجر الإلكتروني =====
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
+app.post('/api/store-order', async (req, res) => {
+  try {
+    const o = req.body || {};
+    const leads = await (typeof readLeads !== "undefined" ? readLeads() : loadLeads());
+    const newLead = {
+      id: Date.now(),
+      name: o.name || 'زبون المتجر',
+      phone: o.phone || '',
+      email: o.email || '',
+      wilaya: o.wilaya || 'غير محددة',
+      address: o.address || '',
+      product: o.products || 'طلب من المتجر',
+      quantity: o.qty || 1,
+      amount: Number(o.total) || 0,
+      cost: 0,
+      profit: Number(o.total) || 0,
+      status: 'جديد',
+      company: o.delivery || '',
+      tracking: '',
+      notes: 'طلب أونلاين ' + (o.orderId || '') + ' | ' + (o.payment || ''),
+      source: 'المتجر الإلكتروني',
+      date: new Date().toISOString()
+    };
+    leads.unshift(newLead);
+    await saveLeads(leads);
+    console.log('🛒 طلب جديد من المتجر:', newLead.name, newLead.amount);
+    res.json({ ok: true, id: newLead.id });
+  } catch (e) {
+    console.error('خطأ في طلب المتجر:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.listen(5000, () => {
     console.log("🚀 CRM System Running with Inventory Tracker on http://localhost:5000");
   });
 }).catch(err => {
@@ -711,6 +816,10 @@ app.post("/api/leads/webhook", async (req, res) => {
         leads.unshift(newLead);
         await saveLeads(leads);
         console.log('زبون جديد من Messenger:', newLead);
+        const replyText = generateSmartReply(messageText);
+        await sendMessengerReply(senderId, replyText);
+        const replyTextVal = generateSmartReply(messageText);
+        await sendMessengerReply(senderId, replyTextVal);
       }
     });
     res.status(200).send("EVENT_RECEIVED");
