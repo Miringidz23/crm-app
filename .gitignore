@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.local
+.DS_Store
+*.pem
+id_rsa
+id_rsa.pub
+.ssh/
+credentials.json

@@ -1,0 +1,38 @@
+[
+  {
+    "id": 5,
+    "name": "toufik ",
+    "email": "chamsse18@gmail.com",
+    "phone": "+213 655 10 22 32",
+    "wilaya": "36 - الطارف",
+    "productName": "حقيبة ظهر رقمية",
+    "quantity": 1,
+    "amount": 5500,
+    "cost": 2000,
+    "profit": 3500,
+    "courier": "ZR Express",
+    "tracking": "#5",
+    "notes": "لا توجد ملاحظات",
+    "status": "تم الشحن",
+    "createdAt": "2026-08-02T01:02:56.459Z"
+  },
+  {
+    "id": 4,
+    "name": "amira",
+    "email": "miringidz23@gmail.com",
+    "phone": "0655102232",
+    "status": "قيد التأكيد",
+    "wilaya": "23 - عنابة",
+    "amount": 2600,
+    "profit": 2600,
+    "courier": "Yalidine Express",
+    "notes": ""
+  },
+  {
+    "id": 3,
+    "name": "شمسو  كلاعي ",
+    "email": "amira23klai@gmail.com",
+    "phone": "0655102232",
+    "status": "جديد"
+  }
+]
