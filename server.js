@@ -1,7 +1,20 @@
+require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+
+const { MongoClient } = require('mongodb');
+const MONGO_URI = process.env.MONGO_URI;
+const client = new MongoClient(MONGO_URI);
+let leadsCollection;
+
+async function connectDB() {
+  await client.connect();
+  const db = client.db('crmapp');
+  leadsCollection = db.collection('leads');
+  console.log('✅ متصل بقاعدة بيانات MongoDB');
+}
 
 const app = express();
 
@@ -44,8 +57,13 @@ function saveData(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
-function readLeads() { return readData(DB_FILE, []); }
-function saveLeads(leads) { saveData(DB_FILE, leads); }
+async function readLeads() {
+  return await leadsCollection.find({}).toArray();
+}
+async function saveLeads(leads) {
+  await leadsCollection.deleteMany({});
+  if (leads.length > 0) await leadsCollection.insertMany(leads);
+}
 
 function readProducts() {
   const products = readData(PRODUCTS_FILE, [
@@ -112,8 +130,8 @@ app.post('/api/products/delete/:id', (req, res) => {
 });
 
 // === إضافة زبون وطلب ===
-app.post('/api/leads', (req, res) => {
-  const leads = readLeads();
+app.post('/api/leads', async (req, res) => {
+  const leads = await readLeads();
   const products = readProducts();
   const { name, email, phone, wilaya, productId, qty, notes, status, courier, tracking } = req.body;
 
@@ -156,13 +174,13 @@ app.post('/api/leads', (req, res) => {
   };
 
   leads.unshift(newLead);
-  saveLeads(leads);
+  await saveLeads(leads);
   res.redirect('/?newLead=true');
 });
 
 // === تعديل زبون ===
-app.post('/api/leads/update/:id', (req, res) => {
-  const leads = readLeads();
+app.post('/api/leads/update/:id', async (req, res) => {
+  const leads = await readLeads();
   const id = parseInt(req.params.id);
   const lead = leads.find(l => l.id === id);
   if (lead) {
@@ -176,22 +194,22 @@ app.post('/api/leads/update/:id', (req, res) => {
     lead.tracking = req.body.tracking || lead.tracking;
     lead.notes = req.body.notes || '';
     lead.status = req.body.status || lead.status;
-    saveLeads(leads);
+    await saveLeads(leads);
   }
   res.redirect('/');
 });
 
 // === حذف زبون ===
-app.post('/api/leads/delete/:id', (req, res) => {
-  let leads = readLeads();
+app.post('/api/leads/delete/:id', async (req, res) => {
+  let leads = await readLeads();
   leads = leads.filter(l => l.id !== parseInt(req.params.id));
-  saveLeads(leads);
+  await saveLeads(leads);
   res.redirect('/');
 });
 
 // === تصدير CSV ===
-app.get('/api/export', (req, res) => {
-  const leads = readLeads();
+app.get('/api/export', async (req, res) => {
+  const leads = await readLeads();
   let csvContent = 'المعرف,الاسم,الهاتف,الولاية,المنتج,المبلغ,الربح الصافي,شركة التوصيل,رقم التتبع,الحالة,التاريخ\n';
   
   leads.forEach(l => {
@@ -205,8 +223,8 @@ app.get('/api/export', (req, res) => {
 });
 
 // === وصل الشحن ===
-app.get('/invoice/:id', (req, res) => {
-  const leads = readLeads();
+app.get('/invoice/:id', async (req, res) => {
+  const leads = await readLeads();
   const lead = leads.find(l => l.id === parseInt(req.params.id));
   if (!lead) return res.status(404).send("الزبون غير موجود");
 
@@ -252,8 +270,8 @@ app.get('/invoice/:id', (req, res) => {
 });
 
 // === الصفحة الرئيسية ===
-app.get('/', (req, res) => {
-  const leads = readLeads();
+app.get('/', async (req, res) => {
+  const leads = await readLeads();
   const products = readProducts();
 
   const total = leads.length;
@@ -639,8 +657,12 @@ app.get('/', (req, res) => {
   `);
 });
 
-app.listen(5000, () => {
-  console.log("🚀 CRM System Running with Inventory Tracker on http://localhost:5000");
+connectDB().then(() => {
+  app.listen(5000, () => {
+    console.log("🚀 CRM System Running with Inventory Tracker on http://localhost:5000");
+  });
+}).catch(err => {
+  console.error('❌ فشل الاتصال بقاعدة البيانات:', err);
 });
 
 
@@ -659,16 +681,16 @@ app.get("/api/leads/webhook", (req, res) => {
 });
 
 // Facebook Incoming Lead Webhook
-app.post("/api/leads/webhook", (req, res) => {
+app.post("/api/leads/webhook", async (req, res) => {
   const body = req.body;
   if (body.object === "page") {
-    body.entry.forEach(entry => {
+    body.entry.forEach(async (entry) => {
       const webhookEvent = entry.messaging ? entry.messaging[0] : null;
       if (webhookEvent && webhookEvent.message) {
         const senderId = webhookEvent.sender.id;
         const messageText = webhookEvent.message.text || 'بدون نص';
 
-        const leads = readLeads();
+        const leads = await readLeads();
         const newLead = {
           id: leads.length > 0 ? Math.max(...leads.map(l => l.id)) + 1 : 1,
           name: 'زبون Messenger',
@@ -687,7 +709,7 @@ app.post("/api/leads/webhook", (req, res) => {
           createdAt: new Date().toISOString()
         };
         leads.unshift(newLead);
-        saveLeads(leads);
+        await saveLeads(leads);
         console.log('زبون جديد من Messenger:', newLead);
       }
     });
