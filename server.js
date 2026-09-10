@@ -758,7 +758,7 @@ app.post('/api/store-order', async (req, res) => {
       name: o.name || 'زبون المتجر',
       phone: o.phone || '',
       email: o.email || '',
-      wilaya: o.wilaya || 'غير محددة',
+      wilaya: o.wilaya ? (o.wilaya + (o.address ? ' (' + o.address + ')' : '')) : 'غير محددة',
       address: o.address || '',
       product: finalProduct,
       productName: finalProduct,
@@ -769,7 +769,7 @@ app.post('/api/store-order', async (req, res) => {
       status: 'جديد',
       company: o.delivery || '',
       tracking: '',
-      notes: 'طلب أونلاين ' + (o.orderId || '') + ' | ' + (o.payment || ''),
+      notes: (o.address ? '🏠 العنوان: ' + o.address + ' | ' : '') + 'طلب أونلاين ' + (o.orderId || '') + ' | ' + (o.payment || ''),
       source: 'المتجر الإلكتروني',
       date: new Date().toISOString()
     };
