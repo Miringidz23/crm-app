@@ -195,14 +195,14 @@ app.post('/api/products/delete/:id', (req, res) => {
 app.post('/api/leads', async (req, res) => {
   const leads = await readLeads();
   const products = readProducts();
-  const { name, email, phone, wilaya, productId, qty, notes, status, courier, tracking } = req.body;
+  const { name, email, phone, wilaya, productId, product_name, product, price, qty, quantity: qtyBody, notes, status, courier, tracking, customAmount } = req.body;
 
   const product = products.find(p => p.id === parseInt(productId));
-  const quantity = parseInt(qty) || 1;
+  const quantity = parseInt(qty) || parseInt(qtyBody) || 1;
 
   let amount = 0;
   let cost = 0;
-  let productName = "منتج عام";
+  let productName = product_name || product || "منتج عام";
 
   if (product) {
     productName = product.name;
@@ -214,7 +214,8 @@ app.post('/api/leads', async (req, res) => {
     product.soldQty = (product.soldQty || 0) + quantity;
     saveProducts(products);
   } else {
-    amount = parseFloat(req.body.customAmount) || 0;
+  amount = parseFloat(customAmount) || parseFloat(price) || parseFloat(req.body.total) || parseFloat(req.body.amount) || 0;
+    
   }
 
   const newLead = {
