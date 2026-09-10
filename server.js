@@ -195,7 +195,7 @@ app.post('/api/products/delete/:id', (req, res) => {
 app.post('/api/leads', async (req, res) => {
   const leads = await readLeads();
   const products = readProducts();
-  const { name, email, phone, wilaya, productId, product_name, product, price, qty, quantity: qtyBody, notes, status, courier, tracking, customAmount } = req.body;
+  const { name, email, phone, wilaya, productId, product_name, price, qty, quantity: qtyBody, notes, status, courier, tracking, customAmount } = req.body;
 
   const product = products.find(p => p.id === parseInt(productId));
   const quantity = parseInt(qty) || parseInt(qtyBody) || 1;
