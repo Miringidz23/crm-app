@@ -760,7 +760,8 @@ app.post('/api/store-order', async (req, res) => {
       email: o.email || '',
       wilaya: o.wilaya || 'غير محددة',
       address: o.address || '',
-      product: finalProduct, // الاسم الذكي والمصفى هنا
+      product: finalProduct,
+      productName: finalProduct,
       quantity: o.quantity || o.qty || 1,
       amount: Number(o.price) || Number(o.total) || Number(o.amount) || 0,
       cost: 0,
