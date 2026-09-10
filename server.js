@@ -742,7 +742,7 @@ app.post('/api/store-order', async (req, res) => {
       email: o.email || '',
       wilaya: o.wilaya || 'غير محددة',
       address: o.address || '',
-      product: o.products || 'طلب من المتجر',
+      product: o.product_name || o.product || o.products || 'طلب من المتجر',
       quantity: o.qty || 1,
       amount: Number(o.total) || 0,
       cost: 0,
