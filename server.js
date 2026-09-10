@@ -202,7 +202,7 @@ app.post('/api/leads', async (req, res) => {
 
   let amount = 0;
   let cost = 0;
-  let productName = product_name || product || "منتج عام";
+  let productName = req.body.product_name || req.body.productName || req.body.product || "طلب عام";
 
   if (product) {
     productName = product.name;
