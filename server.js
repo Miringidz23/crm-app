@@ -735,6 +735,24 @@ app.post('/api/store-order', async (req, res) => {
   try {
     const o = req.body || {};
     const leads = await (typeof readLeads !== "undefined" ? readLeads() : loadLeads());
+
+    // 1. كشف ذكي لاسم المنتج وتفادي كلمة "طلب عام" الافتراضية
+    let finalProduct = "";
+
+    // إذا أرسل المتجر قائمة العناصر في السلة، نجمع أسماءها
+    if (o.items && Array.isArray(o.items) && o.items.length > 0) {
+        finalProduct = o.items.map(i => i.name).filter(Boolean).join(' + ');
+    }
+
+    // إذا لم نجد سلة، نأخذ الحقول البديلة بشرط ألا تكون "طلب عام"
+    if (!finalProduct || finalProduct === "طلب عام") {
+        finalProduct = o.product_name || o.product;
+    }
+
+    if (!finalProduct || finalProduct === "طلب عام") {
+        finalProduct = (o.products && o.products !== "طلب عام") ? o.products : "طلب من المتجر";
+    }
+
     const newLead = {
       id: Date.now(),
       name: o.name || 'زبون المتجر',
@@ -742,11 +760,11 @@ app.post('/api/store-order', async (req, res) => {
       email: o.email || '',
       wilaya: o.wilaya || 'غير محددة',
       address: o.address || '',
-      product: o.product_name || o.product || o.products || 'طلب من المتجر',
+      product: finalProduct, // الاسم الذكي والمصفى هنا
       quantity: o.quantity || o.qty || 1,
       amount: Number(o.price) || Number(o.total) || Number(o.amount) || 0,
       cost: 0,
-      profit: Number(o.total) || 0,
+      profit: Number(o.price) || Number(o.total) || Number(o.amount) || 0,
       status: 'جديد',
       company: o.delivery || '',
       tracking: '',
@@ -754,16 +772,16 @@ app.post('/api/store-order', async (req, res) => {
       source: 'المتجر الإلكتروني',
       date: new Date().toISOString()
     };
+
     leads.unshift(newLead);
     await saveLeads(leads);
     console.log('🛒 طلب جديد من المتجر:', newLead.name, newLead.amount);
     res.json({ ok: true, id: newLead.id });
   } catch (e) {
-    console.error('خطأ في طلب المتجر:', e);
+    console.error('❌ خطأ في طلب المتجر:', e);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
-
 app.listen(5000, () => {
     console.log("🚀 CRM System Running with Inventory Tracker on http://localhost:5000");
   });
