@@ -858,7 +858,17 @@ app.post('/api/store-order', async (req, res) => {
 });
 
 // ==================== 🛒 إدارة منتجات المتجر ====================
+// تعريف موديل المنتج (Model)
+const productSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    price: { type: Number, required: true },
+    oldPrice: { type: Number, default: 0 },
+    category: { type: String, default: 'عام' },
+    image: { type: String, required: true },
+    stock: { type: Number, default: 1 }
+});
 
+const Product = mongoose.models.Product || mongoose.model('Product', productSchema);
 // 1. جلب المنتجات للمتجر dzShop
 app.get('/api/products', async (req, res) => {
     try {
