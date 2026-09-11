@@ -780,9 +780,45 @@ app.post('/api/store-order', async (req, res) => {
     res.json({ ok: true, id: newLead.id });
   } catch (e) {
     console.error('❌ خطأ في طلب المتجر:', e);
-    res.status(500).json({ ok: false, error: e.message });
+        res.status(500).json({ ok: false, error: e.message });
   }
 });
+
+// ==================== 🛒 إدارة منتجات المتجر ====================
+
+// 1. جلب المنتجات للمتجر dzShop
+app.get('/api/products', async (req, res) => {
+    try {
+        const products = await Product.find({});
+        res.json(products);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. إضافة منتج جديد
+app.post('/api/products', async (req, res) => {
+    try {
+        const newProduct = new Product(req.body);
+        await newProduct.save();
+        res.json({ success: true, product: newProduct });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 3. حذف منتج
+app.delete('/api/products/:id', async (req, res) => {
+    try {
+        await Product.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// ==============================================================
+
+
 app.listen(5000, () => {
     console.log("🚀 CRM System Running with Inventory Tracker on http://localhost:5000");
   });
