@@ -715,6 +715,79 @@ app.get('/', async (req, res) => {
           document.getElementById('editModal').style.display = 'none';
         }
       </script>
+    <!-- ================= 🏪 قسم إدارة منتجات المتجر ================= -->
+    <div style="background: #ffffff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin: 25px auto; max-width: 1200px; font-family: 'Segoe UI', sans-serif; direction: rtl; text-align: right;">
+        <h3 style="color: #4f46e5; margin-bottom: 20px; font-size: 1.5rem; display: flex; align-items: center; gap: 10px;">
+            🛍️ إضافة منتج جديد للمتجر (dzShop)
+        </h3>
+        
+        <form id="productForm" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+            <div style="display: flex; flex-direction: column; gap: 5px;">
+                <label style="font-weight: 600; color: #4a5568;">اسم المنتج:</label>
+                <input type="text" id="pName" placeholder="مثال: حافظة هاتف سامسونج" required style="padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;">
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 5px;">
+                <label style="font-weight: 600; color: #4a5568;">سعر البيع (د.ج):</label>
+                <input type="number" id="pPrice" placeholder="مثال: 3500" required style="padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;">
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 5px;">
+                <label style="font-weight: 600; color: #4a5568;">السعر القديم قبل الخصم (اختياري):</label>
+                <input type="number" id="pOldPrice" placeholder="مثال: 5000" style="padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;">
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 5px;">
+                <label style="font-weight: 600; color: #4a5568;">القسم:</label>
+                <input type="text" id="pCategory" placeholder="مثال: إلكترونيات" style="padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;">
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 5px; grid-column: 1 / -1;">
+                <label style="font-weight: 600; color: #4a5568;">رابط صورة المنتج (Direct URL):</label>
+                <input type="url" id="pImage" placeholder="https://i.ibb.co/..." required style="padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;">
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 5px;">
+                <label style="font-weight: 600; color: #4a5568;">الكمية في المخزون:</label>
+                <input type="number" id="pStock" placeholder="مثال: 50" style="padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;">
+            </div>
+            
+            <button type="submit" style="grid-column: 1 / -1; background: #4f46e5; color: white; padding: 14px; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px;">
+                ✨ حفظ ونشر المنتج في المتجر
+            </button>
+        </form>
+    </div>
+
+    <script>
+    document.getElementById("productForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const productData = {
+            name: document.getElementById("pName").value,
+            price: Number(document.getElementById("pPrice").value),
+            oldPrice: Number(document.getElementById("pOldPrice").value) || 0,
+            category: document.getElementById("pCategory").value || "عام",
+            image: document.getElementById("pImage").value,
+            stock: Number(document.getElementById("pStock").value) || 1,
+        };
+
+        try {
+            const response = await fetch("/api/products", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(productData)
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                alert('تم إضافة المنتج ونشره في المتجر بنجاح ✅');
+                document.getElementById("productForm").reset();
+                location.reload();
+            } else {
+                alert("❌ حدث خطأ أثناء إضافة المنتج");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("❌ فشل الاتصال بالسيرفر");
+        }
+    });
+    </script>
     </body>
     </html>
   `);
