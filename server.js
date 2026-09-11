@@ -753,38 +753,40 @@ app.get('/', async (req, res) => {
         </form>
     </div>
 
-    <script>
+        <script>
     document.getElementById("productForm").addEventListener("submit", async (e) => {
         e.preventDefault();
 
         const productData = {
-            name: document.getElementById("pName").value,
+            name: document.getElementById("pName").value.trim(),
             price: Number(document.getElementById("pPrice").value),
             oldPrice: Number(document.getElementById("pOldPrice").value) || 0,
-            category: document.getElementById("pCategory").value || "عام",
-            image: document.getElementById("pImage").value,
+            category: document.getElementById("pCategory").value.trim() || "عام",
+            image: document.getElementById("pImage").value.trim(),
             stock: Number(document.getElementById("pStock").value) || 1,
         };
 
         try {
-            const response = await fetch("/api/products", {
+            const targetUrl = window.location.origin + "/api/products";
+            
+            const response = await fetch(targetUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(productData)
             });
 
             const result = await response.json();
-            
-            if (result.success) {
-                alert('تم إضافة المنتج ونشره في المتجر بنجاح ✅');
+
+            if (response.ok && result.success) {
+                alert("تم إضافة المنتج ونشره في المتجر بنجاح ✅");
                 document.getElementById("productForm").reset();
                 location.reload();
             } else {
-                alert("❌ حدث خطأ أثناء إضافة المنتج");
+                alert("خطأ من السيرفر: " + (result.error || "لم يتم الحفظ"));
             }
         } catch (err) {
             console.error(err);
-            alert("❌ فشل الاتصال بالسيرفر");
+            alert("خطأ تفصيلي: " + err.message);
         }
     });
     </script>
