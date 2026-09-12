@@ -861,6 +861,7 @@ app.post('/api/store-order', async (req, res) => {
 
 // ==================== 🛒 إدارة منتجات المتجر ====================
 // تعريف موديل المنتج (Model)
+const mongoose = require('mongoose');
 const productSchema = new mongoose.Schema({
     name: { type: String, required: true },
     price: { type: Number, required: true },
