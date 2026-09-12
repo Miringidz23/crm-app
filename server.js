@@ -859,51 +859,49 @@ app.post('/api/store-order', async (req, res) => {
   }
 });
 
-// ==================== 🛒 إدارة منتجات المتجر ====================
-// تعريف موديل المنتج (Model)
-const mongoose = require('mongoose');
-const productSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    price: { type: Number, required: true },
-    oldPrice: { type: Number, default: 0 },
-    category: { type: String, default: 'عام' },
-    image: { type: String, required: true },
-    stock: { type: Number, default: 1 }
-});
-
-const Product = mongoose.models.Product || mongoose.model('Product', productSchema);
-// 1. جلب المنتجات للمتجر dzShop
+// ==================== إدارة منتجات المتجر ====================
 app.get('/api/products', async (req, res) => {
     try {
-        const products = await Product.find({});
-        res.json(products);
+        const products = await Promise.resolve(readProducts());
+        res.json(Array.isArray(products) ? products : []);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// 2. إضافة منتج جديد
 app.post('/api/products', async (req, res) => {
     try {
-        const newProduct = new Product(req.body);
-        await newProduct.save();
+        const products = await Promise.resolve(readProducts());
+        const list = Array.isArray(products) ? products : [];
+        const newProduct = {
+            id: Date.now(),
+            name: String(req.body.name || '').trim(),
+            price: Number(req.body.price) || 0,
+            oldPrice: Number(req.body.oldPrice) || 0,
+            category: String(req.body.category || 'عام').trim(),
+            image: String(req.body.image || '').trim(),
+            stock: Number(req.body.stock) || 1
+        };
+        list.unshift(newProduct);
+        await Promise.resolve(saveProducts(list));
         res.json({ success: true, product: newProduct });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error(err);
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// 3. حذف منتج
 app.delete('/api/products/:id', async (req, res) => {
     try {
-        await Product.findByIdAndDelete(req.params.id);
+        const products = await Promise.resolve(readProducts());
+        const list = (Array.isArray(products) ? products : [])
+            .filter(p => String(p.id) !== String(req.params.id));
+        await Promise.resolve(saveProducts(list));
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ success: false, error: err.message });
     }
 });
-// ==============================================================
-
 
 app.listen(5000, () => {
     console.log("🚀 CRM System Running with Inventory Tracker on http://localhost:5000");
