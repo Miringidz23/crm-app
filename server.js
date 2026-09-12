@@ -232,10 +232,7 @@ app.post('/api/leads', async (req, res) => {
     amount = product.price * quantity;
     cost = product.cost * quantity;
     
-    // خصم المتبقي وزيادة المباع
-    product.stock = Math.max(0, product.stock - quantity);
-    product.soldQty = (product.soldQty || 0) + quantity;
-    saveProducts(products);
+    
   } else {
   amount = parseFloat(customAmount) || parseFloat(price) || parseFloat(req.body.total) || parseFloat(req.body.amount) || 0;
     
@@ -264,12 +261,38 @@ app.post('/api/leads', async (req, res) => {
   res.redirect('/?newLead=true');
 });
 
-// === تعديل زبون ===
+// === تعديل زبون وخصم المخزون عند التغيير لـ مؤكد ===
 app.post('/api/leads/update/:id', async (req, res) => {
   const leads = await readLeads();
   const id = parseInt(req.params.id);
   const lead = leads.find(l => l.id === id);
+
   if (lead) {
+    const oldStatus = lead.status;
+    const newStatus = req.body.status || lead.status;
+
+    // فحص ما إذا تحولت الحالة إلى "مؤكد" ولم تكن كذلك من قبل
+    const isConfirming = (newStatus === 'مؤكد' || newStatus === 'confirmed' || newStatus === 'تم التأكيد');
+    const wasNotConfirmed = (oldStatus !== 'مؤكد' && oldStatus !== 'confirmed' && oldStatus !== 'تم التأكيد');
+
+    if (isConfirming && wasNotConfirmed) {
+      const products = readProducts();
+      
+      // البحث عن المنتج المطابق في CRM
+      const product = products.find(p => 
+        (lead.productId && p.id === parseInt(lead.productId)) || 
+        (p.name === lead.productName)
+      );
+
+      if (product) {
+        const qty = parseInt(lead.quantity) || 1;
+        product.stock = Math.max(0, (parseInt(product.stock) || 0) - qty); // تنقيص المخزون
+        product.soldQty = (parseInt(product.soldQty) || 0) + qty;         // زيادة المبيعات
+        saveProducts(products); // حفظ التحديث في ملف المنتجات
+      }
+    }
+
+    // تحديث باقي بيانات الزبون والحالة
     lead.name = req.body.name || lead.name;
     lead.email = req.body.email || lead.email;
     lead.phone = req.body.phone || lead.phone;
@@ -279,9 +302,11 @@ app.post('/api/leads/update/:id', async (req, res) => {
     lead.courier = req.body.courier || lead.courier;
     lead.tracking = req.body.tracking || lead.tracking;
     lead.notes = req.body.notes || '';
-    lead.status = req.body.status || lead.status;
+    lead.status = newStatus;
+
     await saveLeads(leads);
   }
+
   res.redirect('/');
 });
 
