@@ -261,7 +261,7 @@ app.post('/api/leads', async (req, res) => {
   res.redirect('/?newLead=true');
 });
 
-// === دالة تعديل الطلب وخصم المخزون عند التأكيد ===
+// === دالة تعديل الطلب وخصم المخزون الذكية عند التأكيد ===
 app.post('/api/leads/update/:id', async (req, res) => {
   try {
     const leads = await readLeads();
@@ -270,30 +270,45 @@ app.post('/api/leads/update/:id', async (req, res) => {
     const lead = leads.find(l => l.id === id);
 
     if (lead) {
-      const oldStatus = lead.status;
-      const newStatus = req.body.status || lead.status;
+      const oldStatus = String(lead.status || '').trim();
+      const newStatus = String(req.body.status || lead.status || '').trim();
 
-      // 1. خصم المخزون فقط إذا أصبحت الحالة "مؤكد" ولم تكن كذلك من قبل
-      const confirmedStatuses = ['مؤكد', 'confirmed', 'تم التأكيد', 'قيد الشحن'];
-      const isNowConfirmed = confirmedStatuses.includes(newStatus);
-      const wasNotConfirmed = !confirmedStatuses.includes(oldStatus);
+      // كل الحالات التي تعتبر تأكيداً للطلب
+      const confirmedStatuses = ['مؤكد', 'confirmed', 'تم التأكيد', 'قيد الشحن', 'تم التسليم', 'تم الشحن', 'مقبول'];
+      
+      const isNowConfirmed = confirmedStatuses.some(s => newStatus.toLowerCase().includes(s.toLowerCase()));
+      const wasNotConfirmed = !confirmedStatuses.some(s => oldStatus.toLowerCase().includes(s.toLowerCase()));
 
+      // الخصم عند التحويل إلى حالة مؤكدة
       if (isNowConfirmed && wasNotConfirmed) {
-        const product = products.find(p => 
-          (lead.productId && String(p.id) === String(lead.productId)) ||
-          (p.name && p.name.trim() === (lead.productName || lead.product || "").trim())
-        );
+        
+        // 🔥 بحث ذكي عن المنتج حتى لو كان الاسم مكتوباً كـ "حقيبة ظهر (x1)"
+        const product = products.find(p => {
+          if (!p.name) return false;
+          const pName = p.name.trim().toLowerCase();
+          const lName = (lead.productName || lead.product_name || lead.product || "").trim().toLowerCase();
+          
+          return (lead.productId && String(p.id) === String(lead.productId)) ||
+                 lName.includes(pName) || 
+                 pName.includes(lName);
+        });
 
         if (product) {
           const qty = parseInt(lead.quantity || lead.qty) || 1;
+          
+          // تنقيص المخزون وزيادة المبيعات
           product.stock = Math.max(0, (parseInt(product.stock) || 0) - qty);
           product.soldQty = (parseInt(product.soldQty) || 0) + qty;
-          saveProducts(products); // حفظ التحديث فوراً في ملف المنتجات
-          console.log(`✅ تم خصم ${qty} قطعة من مخزون: ${product.name}`);
+          
+          // 💾 حفظ التغييرات فوراً في ملف المنتجات
+          saveProducts(products);
+          console.log(`✅ [نجاح] تم خصم ${qty} قطعة من مخزون: ${product.name} (المتبقي: ${product.stock})`);
+        } else {
+          console.log(`⚠️ لم يتم العثور على المنتج المطابق لـ: ${lead.productName}`);
         }
       }
 
-      // 2. تحديث كافة بيانات الطلب والزبون
+      // تحديث بيانات الطلب في قائمة الزبائن
       lead.name = req.body.name || lead.name;
       lead.email = req.body.email || lead.email;
       lead.phone = req.body.phone || lead.phone;
