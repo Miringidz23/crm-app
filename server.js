@@ -261,70 +261,58 @@ app.post('/api/leads', async (req, res) => {
   res.redirect('/?newLead=true');
 });
 
-// === دالة تعديل الطلب وخصم المخزون الذكية عند التأكيد ===
+// === دالة تعديل الطلب وخصم المخزون الاحترافية ===
 app.post('/api/leads/update/:id', async (req, res) => {
   try {
     const leads = await readLeads();
     const products = readProducts();
-    const id = parseInt(req.params.id);
-    const lead = leads.find(l => l.id === id);
+    const id = String(req.params.id); // تحويل ID لنص لضمان المطابقة
+    const lead = leads.find(l => String(l.id) === id);
 
     if (lead) {
-      const oldStatus = String(lead.status || '').trim();
-      const newStatus = String(req.body.status || lead.status || '').trim();
+      const oldStatus = lead.status || '';
+      const newStatus = req.body.status || lead.status;
 
-      // كل الحالات التي تعتبر تأكيداً للطلب
-      const confirmedStatuses = ['مؤكد', 'confirmed', 'تم التأكيد', 'قيد الشحن', 'تم التسليم', 'تم الشحن', 'مقبول'];
-      
-      const isNowConfirmed = confirmedStatuses.some(s => newStatus.toLowerCase().includes(s.toLowerCase()));
-      const wasNotConfirmed = !confirmedStatuses.some(s => oldStatus.toLowerCase().includes(s.toLowerCase()));
+      // 1. تحديد كلمات التأكيد
+      const confirmWords = ['مؤكد', 'confirmed', 'تم التأكيد', 'شحن', 'تسليم'];
+      const isNowConfirmed = confirmWords.some(w => newStatus.includes(w));
+      const wasNotConfirmed = !confirmWords.some(w => oldStatus.includes(w));
 
-      // الخصم عند التحويل إلى حالة مؤكدة
+      // 2. الخصم فقط عند التحويل لحالة مؤكدة
       if (isNowConfirmed && wasNotConfirmed) {
-        
-        // 🔥 بحث ذكي عن المنتج حتى لو كان الاسم مكتوباً كـ "حقيبة ظهر (x1)"
+        // تنظيف اسم المنتج من الزوائد مثل (x1)
+        let cleanLeadProductName = (lead.productName || lead.product || "").split('(')[0].trim();
+
         const product = products.find(p => {
-          if (!p.name) return false;
-          const pName = p.name.trim().toLowerCase();
-          const lName = (lead.productName || lead.product_name || lead.product || "").trim().toLowerCase();
-          
-          return (lead.productId && String(p.id) === String(lead.productId)) ||
-                 lName.includes(pName) || 
-                 pName.includes(lName);
+          const pName = String(p.name || '').trim();
+          return cleanLeadProductName.includes(pName) || pName.includes(cleanLeadProductName);
         });
 
         if (product) {
           const qty = parseInt(lead.quantity || lead.qty) || 1;
+          product.stock = Math.max(0, (Number(product.stock) || 0) - qty);
+          product.soldQty = (Number(product.soldQty) || 0) + qty;
           
-          // تنقيص المخزون وزيادة المبيعات
-          product.stock = Math.max(0, (parseInt(product.stock) || 0) - qty);
-          product.soldQty = (parseInt(product.soldQty) || 0) + qty;
-          
-          // 💾 حفظ التغييرات فوراً في ملف المنتجات
-          saveProducts(products);
-          console.log(`✅ [نجاح] تم خصم ${qty} قطعة من مخزون: ${product.name} (المتبقي: ${product.stock})`);
+          saveProducts(products); // 💾 حفظ المخزون في ملف المنتجات
+          console.log(`✅ نجح الخصم: المنتج ${product.name} أصبح مخزونه ${product.stock}`);
         } else {
-          console.log(`⚠️ لم يتم العثور على المنتج المطابق لـ: ${lead.productName}`);
+          console.log(`❌ فشل الخصم: لم نجد منتج باسم ${cleanLeadProductName}`);
         }
       }
 
-      // تحديث بيانات الطلب في قائمة الزبائن
+      // 3. تحديث بيانات الطلب الأساسية
       lead.name = req.body.name || lead.name;
-      lead.email = req.body.email || lead.email;
       lead.phone = req.body.phone || lead.phone;
-      lead.wilaya = req.body.wilaya || lead.wilaya;
-      lead.amount = parseFloat(req.body.amount) || lead.amount;
-      lead.profit = lead.amount - (parseFloat(lead.cost) || 0);
-      lead.courier = req.body.courier || lead.courier;
-      lead.tracking = req.body.tracking || lead.tracking;
-      lead.notes = req.body.notes !== undefined ? req.body.notes : lead.notes;
       lead.status = newStatus;
+      lead.amount = req.body.amount || lead.amount;
+      lead.wilaya = req.body.wilaya || lead.wilaya;
+      lead.notes = req.body.notes || lead.notes;
 
-      await saveLeads(leads);
+      await saveLeads(leads); // 💾 حفظ التعديلات في ملف الزبائن
     }
     res.redirect('/');
   } catch (err) {
-    console.error("خطأ أثناء التحديث:", err);
+    console.error("خطأ التحديث:", err);
     res.redirect('/');
   }
 });
