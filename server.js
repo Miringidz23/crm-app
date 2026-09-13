@@ -306,14 +306,6 @@ app.post('/api/leads/update/:id', async (req, res) => {
   }
 });
 
-      if (product) {
-        const qty = parseInt(lead.quantity) || 1;
-        product.stock = Math.max(0, (parseInt(product.stock) || 0) - qty); // تنقيص المخزون
-        product.soldQty = (parseInt(product.soldQty) || 0) + qty;         // زيادة المبيعات
-        saveProducts(products); // حفظ التحديث في ملف المنتجات
-      }
-    }
-
     // تحديث باقي بيانات الزبون والحالة
     lead.name = req.body.name || lead.name;
     lead.email = req.body.email || lead.email;
