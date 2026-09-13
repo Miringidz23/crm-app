@@ -261,29 +261,58 @@ app.post('/api/leads', async (req, res) => {
   res.redirect('/?newLead=true');
 });
 
-// === تعديل زبون وخصم المخزون عند التغيير لـ مؤكد ===
+// === تعديل بيانات الطلب وخصم المخزون عند التأكيد فقط ===
 app.post('/api/leads/update/:id', async (req, res) => {
-  const leads = await readLeads();
-  const id = parseInt(req.params.id);
-  const lead = leads.find(l => l.id === id);
+  try {
+    const leads = await readLeads();
+    const products = readProducts();
+    const id = parseInt(req.params.id);
+    const lead = leads.find(l => l.id === id);
 
-  if (lead) {
-    const oldStatus = lead.status;
-    const newStatus = req.body.status || lead.status;
+    if (lead) {
+      const oldStatus = lead.status;
+      const newStatus = req.body.status || lead.status;
 
-    // فحص ما إذا تحولت الحالة إلى "مؤكد" ولم تكن كذلك من قبل
-    const isConfirming = (newStatus === 'مؤكد' || newStatus === 'confirmed' || newStatus === 'تم التأكيد');
-    const wasNotConfirmed = (oldStatus !== 'مؤكد' && oldStatus !== 'confirmed' && oldStatus !== 'تم التأكيد');
+      // 1. منطق خصم المخزون (فقط إذا تحولت الحالة إلى مؤكد)
+      const confirmedStatuses = ['مؤكد', 'confirmed', 'تم التأكيد'];
+      const isNowConfirmed = confirmedStatuses.includes(newStatus);
+      const wasNotConfirmed = !confirmedStatuses.includes(oldStatus);
 
-    if (isConfirming && wasNotConfirmed) {
-      const products = readProducts();
-      
-      // البحث عن المنتج المطابق في CRM
-      const product = products.find(p => 
-        (lead.productId && p.id === parseInt(lead.productId)) || 
-        (p.name === lead.productName)
-      );
+      if (isNowConfirmed && wasNotConfirmed) {
+        // البحث عن المنتج المطابق (بالـ ID أو بالاسم)
+        const product = products.find(p => 
+          (lead.productId && String(p.id) === String(lead.productId)) ||
+          (p.name && p.name.trim() === (lead.productName || lead.product || "").trim())
+        );
 
+        if (product) {
+          const qty = parseInt(lead.quantity || lead.qty) || 1;
+          product.stock = Math.max(0, (parseInt(product.stock) || 0) - qty);
+          product.soldQty = (parseInt(product.soldQty) || 0) + qty;
+          
+          saveProducts(products); // حفظ التغيير في المخزون
+          console.log(`✅ تم خصم المخزون لـ: ${product.name}`);
+        }
+      }
+
+      // 2. تحديث بيانات الزبون (لضمان عدم ضياعها)
+      lead.name = req.body.name || lead.name;
+      lead.phone = req.body.phone || lead.phone;
+      lead.wilaya = req.body.wilaya || lead.wilaya;
+      lead.amount = parseFloat(req.body.amount) || lead.amount;
+      lead.status = newStatus;
+      lead.notes = req.body.notes || lead.notes;
+      lead.courier = req.body.courier || lead.courier;
+      lead.tracking = req.body.tracking || lead.tracking;
+
+      await saveLeads(leads);
+    }
+    res.redirect('/');
+  } catch (err) {
+    console.error("Error:", err);
+    res.redirect('/');
+  }
+});
       if (product) {
         const qty = parseInt(lead.quantity) || 1;
         product.stock = Math.max(0, (parseInt(product.stock) || 0) - qty); // تنقيص المخزون
