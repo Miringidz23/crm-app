@@ -314,24 +314,6 @@ app.post('/api/leads/update/:id', async (req, res) => {
   }
 });
 
-    // تحديث باقي بيانات الزبون والحالة
-    lead.name = req.body.name || lead.name;
-    lead.email = req.body.email || lead.email;
-    lead.phone = req.body.phone || lead.phone;
-    lead.wilaya = req.body.wilaya || lead.wilaya;
-    lead.amount = parseFloat(req.body.amount) || lead.amount;
-    lead.profit = lead.amount - (lead.cost || 0);
-    lead.courier = req.body.courier || lead.courier;
-    lead.tracking = req.body.tracking || lead.tracking;
-    lead.notes = req.body.notes || '';
-    lead.status = newStatus;
-
-    await saveLeads(leads);
-  }
-
-  res.redirect('/');
-});
-
 // === حذف زبون ===
 app.post('/api/leads/delete/:id', async (req, res) => {
   let leads = await readLeads();
