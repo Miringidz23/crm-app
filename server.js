@@ -261,7 +261,7 @@ app.post('/api/leads', async (req, res) => {
   res.redirect('/?newLead=true');
 });
 
-// === دالة تعديل الطلب مع خصم المخزون (نسخة خالية من الأخطاء) ===
+// === دالة تعديل الطلب وخصم المخزون عند التأكيد ===
 app.post('/api/leads/update/:id', async (req, res) => {
   try {
     const leads = await readLeads();
@@ -273,9 +273,12 @@ app.post('/api/leads/update/:id', async (req, res) => {
       const oldStatus = lead.status;
       const newStatus = req.body.status || lead.status;
 
-      // منطق الخصم عند التأكيد
-      const confirmedStatuses = ['مؤكد', 'confirmed', 'تم التأكيد'];
-      if (confirmedStatuses.includes(newStatus) && !confirmedStatuses.includes(oldStatus)) {
+      // 1. خصم المخزون فقط إذا أصبحت الحالة "مؤكد" ولم تكن كذلك من قبل
+      const confirmedStatuses = ['مؤكد', 'confirmed', 'تم التأكيد', 'قيد الشحن'];
+      const isNowConfirmed = confirmedStatuses.includes(newStatus);
+      const wasNotConfirmed = !confirmedStatuses.includes(oldStatus);
+
+      if (isNowConfirmed && wasNotConfirmed) {
         const product = products.find(p => 
           (lead.productId && String(p.id) === String(lead.productId)) ||
           (p.name && p.name.trim() === (lead.productName || lead.product || "").trim())
@@ -285,23 +288,28 @@ app.post('/api/leads/update/:id', async (req, res) => {
           const qty = parseInt(lead.quantity || lead.qty) || 1;
           product.stock = Math.max(0, (parseInt(product.stock) || 0) - qty);
           product.soldQty = (parseInt(product.soldQty) || 0) + qty;
-          saveProducts(products);
+          saveProducts(products); // حفظ التحديث فوراً في ملف المنتجات
+          console.log(`✅ تم خصم ${qty} قطعة من مخزون: ${product.name}`);
         }
       }
 
-      // تحديث البيانات
+      // 2. تحديث كافة بيانات الطلب والزبون
       lead.name = req.body.name || lead.name;
+      lead.email = req.body.email || lead.email;
       lead.phone = req.body.phone || lead.phone;
       lead.wilaya = req.body.wilaya || lead.wilaya;
+      lead.amount = parseFloat(req.body.amount) || lead.amount;
+      lead.profit = lead.amount - (parseFloat(lead.cost) || 0);
+      lead.courier = req.body.courier || lead.courier;
+      lead.tracking = req.body.tracking || lead.tracking;
+      lead.notes = req.body.notes !== undefined ? req.body.notes : lead.notes;
       lead.status = newStatus;
-      lead.notes = req.body.notes || lead.notes;
-      lead.amount = req.body.amount || lead.amount;
 
       await saveLeads(leads);
     }
     res.redirect('/');
   } catch (err) {
-    console.error("Error updating lead:", err);
+    console.error("خطأ أثناء التحديث:", err);
     res.redirect('/');
   }
 });
