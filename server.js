@@ -261,7 +261,7 @@ app.post('/api/leads', async (req, res) => {
   res.redirect('/?newLead=true');
 });
 
-// === تعديل بيانات الطلب وخصم المخزون عند التأكيد فقط ===
+// === دالة تعديل الطلب مع خصم المخزون (نسخة خالية من الأخطاء) ===
 app.post('/api/leads/update/:id', async (req, res) => {
   try {
     const leads = await readLeads();
@@ -273,13 +273,9 @@ app.post('/api/leads/update/:id', async (req, res) => {
       const oldStatus = lead.status;
       const newStatus = req.body.status || lead.status;
 
-      // 1. منطق خصم المخزون (فقط إذا تحولت الحالة إلى مؤكد)
+      // منطق الخصم عند التأكيد
       const confirmedStatuses = ['مؤكد', 'confirmed', 'تم التأكيد'];
-      const isNowConfirmed = confirmedStatuses.includes(newStatus);
-      const wasNotConfirmed = !confirmedStatuses.includes(oldStatus);
-
-      if (isNowConfirmed && wasNotConfirmed) {
-        // البحث عن المنتج المطابق (بالـ ID أو بالاسم)
+      if (confirmedStatuses.includes(newStatus) && !confirmedStatuses.includes(oldStatus)) {
         const product = products.find(p => 
           (lead.productId && String(p.id) === String(lead.productId)) ||
           (p.name && p.name.trim() === (lead.productName || lead.product || "").trim())
@@ -289,30 +285,27 @@ app.post('/api/leads/update/:id', async (req, res) => {
           const qty = parseInt(lead.quantity || lead.qty) || 1;
           product.stock = Math.max(0, (parseInt(product.stock) || 0) - qty);
           product.soldQty = (parseInt(product.soldQty) || 0) + qty;
-          
-          saveProducts(products); // حفظ التغيير في المخزون
-          console.log(`✅ تم خصم المخزون لـ: ${product.name}`);
+          saveProducts(products);
         }
       }
 
-      // 2. تحديث بيانات الزبون (لضمان عدم ضياعها)
+      // تحديث البيانات
       lead.name = req.body.name || lead.name;
       lead.phone = req.body.phone || lead.phone;
       lead.wilaya = req.body.wilaya || lead.wilaya;
-      lead.amount = parseFloat(req.body.amount) || lead.amount;
       lead.status = newStatus;
       lead.notes = req.body.notes || lead.notes;
-      lead.courier = req.body.courier || lead.courier;
-      lead.tracking = req.body.tracking || lead.tracking;
+      lead.amount = req.body.amount || lead.amount;
 
       await saveLeads(leads);
     }
     res.redirect('/');
   } catch (err) {
-    console.error("Error:", err);
+    console.error("Error updating lead:", err);
     res.redirect('/');
   }
 });
+
       if (product) {
         const qty = parseInt(lead.quantity) || 1;
         product.stock = Math.max(0, (parseInt(product.stock) || 0) - qty); // تنقيص المخزون
