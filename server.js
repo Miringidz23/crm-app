@@ -150,23 +150,36 @@ function formatPhoneForWA(phone) {
   return clean;
 }
 
-// === إضافة منتج ===
+// === إضافة منتج جديد (النسخة الصحيحة لمنع الخطأ) ===
 app.post('/api/products', (req, res) => {
-  const products = readProducts();
-  const { name, cost, price, stock } = req.body;
-  const initialQty = parseInt(stock) || 0;
-  const newProduct = {
-    id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
-    name,
-    cost: parseFloat(cost) || 0,
-    price: parseFloat(price) || 0,
-    initialStock: initialQty,
-    stock: initialQty,
-    soldQty: 0
-  };
-  products.unshift(newProduct);
-  saveProducts(products);
-  res.redirect('/');
+    try {
+        const products = readProducts();
+        const { name, price, oldPrice, category, image, stock, cost } = req.body;
+
+        // توليد معرف جديد تلقائياً
+        const newId = products.length > 0 ? Math.max(...products.map(p => Number(p.id) || 0)) + 1 : 1;
+
+        const newProduct = {
+            id: newId,
+            name: name || "منتج جديد",
+            price: Number(price) || 0,
+            oldPrice: Number(oldPrice) || 0,
+            cost: Number(cost) || 0,
+            category: category || 'عام',
+            image: image || '',
+            stock: Number(stock) || 0,
+            soldQty: 0,
+            initialStock: Number(stock) || 0
+        };
+
+        products.unshift(newProduct);
+        saveProducts(products);
+
+        // ✅ إرسال استجابة JSON (هذا هو السطر الذي يحل المشكلة)
+        res.status(200).json({ success: true, product: newProduct });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
 });
 
 // === إعادة تزويد المخزون (تزويد شحنة جديدة) ===
