@@ -16,7 +16,7 @@ async function connectDB() {
   productsCollection = db.collection('Products');
   console.log('✅ متصل بقاعدة بيانات MongoDB');
 }
-
+connectDB();
 
 async function sendMessengerReply(senderId, text) {
   try {
@@ -146,24 +146,41 @@ function formatPhoneForWA(phone) {
   return clean;
 }
 
+// === دالة قراءة المنتجات من MongoDB ===
+async function readProducts() {
+  try {
+    if (!productsCollection) return [];
+    return await productsCollection.find({}).toArray();
+  } catch (e) {
+    return [];
+  }
+}
+
+// === دالة تنسيق رقم الهاتف لواتساب ===
+function formatPhoneForWA(phone) {
+  let clean = (phone || '').toString().replace(/\D/g, '');
+  if (clean.startsWith('0')) {
+    clean = '213' + clean.substring(1);
+  }
+  return clean;
+}
+
 // === جلب المنتجات للمتجر من MongoDB ===
 app.get('/api/get-store-products', async (req, res) => {
   try {
-    const products = await productsCollection.find({}).toArray();
-    res.json(products);
+    const products = await readProducts();
+    res.json(products || []);
   } catch (e) {
-    res.status(500).json({ error: "فشل في جلب البيانات من القاعدة" });
+    res.status(500).json({ error: "فشل جلب المنتجات" });
   }
 });
 
-// === إضافة منتج جديد وحفظه في MongoDB ===
+// === إضافة منتج جديد في MongoDB ===
 app.post('/api/products', async (req, res) => {
   try {
     const { name, price, oldPrice, category, image, stock, cost } = req.body;
-    const products = await productsCollection.find({}).toArray();
-    
-    // توليد ID تلقائي
-    const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
+    const products = await readProducts();
+    const newId = products.length > 0 ? Math.max(...products.map(p => Number(p.id) || 0)) + 1 : 1;
 
     const newProduct = {
       id: newId,
@@ -178,7 +195,9 @@ app.post('/api/products', async (req, res) => {
       initialStock: Number(stock) || 0
     };
 
-    await productsCollection.insertOne(newProduct);
+    if (productsCollection) {
+      await productsCollection.insertOne(newProduct);
+    }
     res.json({ success: true, product: newProduct });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -190,10 +209,12 @@ app.post('/api/products/restock/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const addStock = parseInt(req.body.addStock) || 0;
-    await productsCollection.updateOne(
-      { id: id },
-      { $inc: { stock: addStock, initialStock: addStock } }
-    );
+    if (productsCollection) {
+      await productsCollection.updateOne(
+        { id: id },
+        { $inc: { stock: addStock, initialStock: addStock } }
+      );
+    }
     res.redirect('/');
   } catch (e) {
     res.redirect('/');
@@ -204,12 +225,15 @@ app.post('/api/products/restock/:id', async (req, res) => {
 app.post('/api/products/delete/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    await productsCollection.deleteOne({ id: id });
+    if (productsCollection) {
+      await productsCollection.deleteOne({ id: id });
+    }
     res.redirect('/');
   } catch (e) {
     res.redirect('/');
   }
 });
+
 
 // === إضافة زبون وطلب ===
 app.post('/api/leads', async (req, res) => {
