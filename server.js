@@ -7,161 +7,96 @@ const { MongoClient } = require('mongodb');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// === إعداد المحرك والإعدادات الأساسية ===
+// === 1. الإعدادات الأساسية ===
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public'));
-app.use(express.static(__dirname));
+app.use(express.static(__dirname)); // السماح بقراءة الملفات من المجلد الرئيسي
 
-// إعداد محرك العرض للوحة التحكم
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
-
-// === الاتصال بقاعدة البيانات MongoDB ===
-const MONGO_URI = process.env.MONGO_URI;
-const client = new MongoClient(MONGO_URI);
+// === 2. الاتصال بـ MongoDB ===
+const client = new MongoClient(process.env.MONGO_URI);
 let leadsCollection, productsCollection;
 
 async function connectDB() {
-  try {
-    await client.connect();
-    const db = client.db('crmapp');
-    leadsCollection = db.collection('Leads');
-    productsCollection = db.collection('Products');
-    console.log('✅ متصل بـ MongoDB بنجاح');
-  } catch (err) {
-    console.error('❌ خطأ الاتصال بالقاعدة:', err);
-  }
+    try {
+        await client.connect();
+        const db = client.db('crmapp');
+        leadsCollection = db.collection('Leads');
+        productsCollection = db.collection('Products');
+        console.log('✅ متصل بـ MongoDB');
+    } catch (err) {
+        console.error('❌ خطأ في قاعدة البيانات:', err);
+    }
 }
 connectDB();
 
-// ==========================================
-// === 1. الصفحة الرئيسية للوحة التحكم CRM ===
-// ==========================================
-app.get('/', async (req, res) => {
-  try {
-    const leads = leadsCollection ? await leadsCollection.find({}).sort({ _id: -1 }).toArray() : [];
-    const products = productsCollection ? await productsCollection.find({}).toArray() : [];
-    
-    // عرض صفحة لوحة التحكم
-    if (res.render) {
-      res.render('index', { leads, products });
-    } else {
-      res.sendFile(path.join(__dirname, 'index.html'));
-    }
-  } catch (err) {
-    res.sendFile(path.join(__dirname, 'index.html'));
-  }
-});
-
-// ==========================================
-// === 2. API المنتجات لمتجر dzShop ===
-// ==========================================
-app.get('/api/get-store-products', async (req, res) => {
-  try {
-    const products = productsCollection ? await productsCollection.find({}).toArray() : [];
-    res.json(products);
-  } catch (e) {
-    res.status(500).json([]);
-  }
-});
-
-// إضافة منتج جديد
-app.post('/api/products', async (req, res) => {
-  try {
-    const products = await productsCollection.find({}).toArray();
-    const newId = products.length > 0 ? Math.max(...products.map(p => Number(p.id) || 0)) + 1 : 1;
-    
-    const newProduct = {
-      id: newId,
-      name: req.body.name,
-      price: Number(req.body.price) || 0,
-      oldPrice: Number(req.body.oldPrice) || 0,
-      cost: Number(req.body.cost) || 0,
-      category: req.body.category || 'عام',
-      image: req.body.image || '',
-      stock: Number(req.body.stock) || 0,
-      soldQty: 0,
-      initialStock: Number(req.body.stock) || 0
-    };
-
-    await productsCollection.insertOne(newProduct);
-    res.redirect('/');
-  } catch (e) {
-    res.redirect('/');
-  }
-});
-
-// ==========================================
-// === 3. استقبال الطلبات وتأكيدها ===
-// ==========================================
-
-// استقبال طلب من المتجر
-app.post('/api/leads', async (req, res) => {
-  try {
-    const leads = await leadsCollection.find({}).toArray();
-    const newId = leads.length > 0 ? Math.max(...leads.map(l => Number(l.id) || 0)) + 1 : 1;
-    
-    const newLead = {
-      ...req.body,
-      id: newId,
-      status: 'جديد',
-      createdAt: new Date().toISOString()
-    };
-    
-    await leadsCollection.insertOne(newLead);
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ success: false });
-  }
-});
-
-// تحديث الطلب + خصم المخزون فقط عند التأكيد
-app.post('/api/leads/update/:id', async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const lead = await leadsCollection.findOne({ id: id });
-
-    if (lead) {
-      const oldStatus = lead.status || '';
-      const newStatus = req.body.status || lead.status;
-
-      const confirmedWords = ['مؤكد', 'confirmed', 'تم التأكيد', 'قيد الشحن'];
-      const isConfirming = confirmedWords.some(w => newStatus.includes(w));
-      const wasNotConfirmed = !confirmedWords.some(w => oldStatus.includes(w));
-
-      if (isConfirming && wasNotConfirmed) {
-        let cleanName = (lead.productName || lead.product || '').split('(')[0].trim().toLowerCase();
-        
-        const product = await productsCollection.findOne({
-          $or: [
-            { id: Number(lead.productId) },
-            { name: { $regex: cleanName, $options: 'i' } }
-          ]
-        });
-
-        if (product) {
-          const qty = parseInt(lead.quantity) || 1;
-          await productsCollection.updateOne(
-            { id: product.id },
-            { $inc: { stock: -qty, soldQty: qty } }
-          );
+// === 3. تشغيل لوحة التحكم (الواجهة) ===
+app.get('/', (req, res) => {
+    // محاولة إرسال ملف index.html من المجلد الرئيسي
+    res.sendFile(path.join(__dirname, 'index.html'), (err) => {
+        if (err) {
+            // إذا لم يجد الملف، يرسل رسالة بسيطة لكي لا يظهر خطأ 404
+            res.status(200).send("<h1>سيرفر الـ CRM يعمل بنجاح!</h1><p>تأكد من وجود ملف index.html في المجلد الرئيسي على GitHub.</p>");
         }
-      }
+    });
+});
 
-      await leadsCollection.updateOne(
-        { id: id },
-        { $set: { ...req.body, status: newStatus } }
-      );
+// === 4. API المنتجات لمتجر dzShop ===
+app.get('/api/get-store-products', async (req, res) => {
+    try {
+        const products = await productsCollection.find({}).toArray();
+        res.json(products || []);
+    } catch (e) {
+        res.json([]);
     }
-    res.redirect('/');
-  } catch (e) {
-    res.redirect('/');
-  }
 });
 
-// تشغيل السيرفر
-app.listen(PORT, () => {
-  console.log(`🚀 Server is live on port ${PORT}`);
+// === 5. إضافة منتج جديد ===
+app.post('/api/products', async (req, res) => {
+    try {
+        const products = await productsCollection.find({}).toArray();
+        const newId = products.length > 0 ? Math.max(...products.map(p => Number(p.id) || 0)) + 1 : 1;
+        const newProduct = {
+            ...req.body,
+            id: newId,
+            stock: Number(req.body.stock) || 0,
+            price: Number(req.body.price) || 0,
+            soldQty: 0
+        };
+        await productsCollection.insertOne(newProduct);
+        res.redirect('/');
+    } catch (e) { res.redirect('/'); }
 });
+
+// === 6. استقبال الطلبات وخصم المخزون ===
+app.post('/api/leads', async (req, res) => {
+    try {
+        const leads = await leadsCollection.find({}).toArray();
+        const newId = leads.length > 0 ? Math.max(...leads.map(l => Number(l.id) || 0)) + 1 : 1;
+        const newLead = { ...req.body, id: newId, status: 'جديد', createdAt: new Date() };
+        await leadsCollection.insertOne(newLead);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ success: false }); }
+});
+
+app.post('/api/leads/update/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const lead = await leadsCollection.findOne({ id: id });
+        if (lead) {
+            const confirmedStatuses = ['مؤكد', 'confirmed', 'تم التأكيد'];
+            if (confirmedStatuses.includes(req.body.status) && !confirmedStatuses.includes(lead.status)) {
+                let cleanName = (lead.productName || lead.product || '').split('(')[0].trim();
+                await productsCollection.updateOne(
+                    { name: { $regex: cleanName, $options: 'i' } },
+                    { $inc: { stock: -1, soldQty: 1 } }
+                );
+            }
+            await leadsCollection.updateOne({ id: id }, { $set: { ...req.body } });
+        }
+        res.redirect('/');
+    } catch (e) { res.redirect('/'); }
+});
+
+// === تشغيل السيرفر ===
+app.listen(PORT, () => console.log(`🚀 السيرفر يعمل على بورت ${PORT}`));
