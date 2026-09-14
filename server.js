@@ -2,18 +2,25 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const { MongoClient } = require('mongodb');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// === 1. الإعدادات الأساسية ===
+// === الإعدادات والمجلدات ===
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(__dirname)); // السماح بقراءة الملفات من المجلد الرئيسي
 
-// === 2. الاتصال بـ MongoDB ===
+// قراءة الملفات العامة من كل المجلدات المحتملة
+app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+
+// === الاتصال بقاعدة البيانات MongoDB ===
 const client = new MongoClient(process.env.MONGO_URI);
 let leadsCollection, productsCollection;
 
@@ -25,33 +32,51 @@ async function connectDB() {
         productsCollection = db.collection('Products');
         console.log('✅ متصل بـ MongoDB');
     } catch (err) {
-        console.error('❌ خطأ في قاعدة البيانات:', err);
+        console.error('❌ خطأ قاعدة البيانات:', err);
     }
 }
 connectDB();
 
-// === 3. تشغيل لوحة التحكم (الواجهة) ===
-app.get('/', (req, res) => {
-    // محاولة إرسال ملف index.html من المجلد الرئيسي
-    res.sendFile(path.join(__dirname, 'index.html'), (err) => {
-        if (err) {
-            // إذا لم يجد الملف، يرسل رسالة بسيطة لكي لا يظهر خطأ 404
-            res.status(200).send("<h1>سيرفر الـ CRM يعمل بنجاح!</h1><p>تأكد من وجود ملف index.html في المجلد الرئيسي على GitHub.</p>");
+// ==========================================
+// === 1. عرض لوحة تحكم الـ CRM تلقائياً ===
+// ==========================================
+app.get('/', async (req, res) => {
+    try {
+        const leads = leadsCollection ? await leadsCollection.find({}).sort({ _id: -1 }).toArray() : [];
+        const products = productsCollection ? await productsCollection.find({}).toArray() : [];
+
+        // إذا كانت الواجهة تعتمد على EJS
+        if (fs.existsSync(path.join(__dirname, 'views', 'index.ejs'))) {
+            return res.render('index', { leads, products });
         }
-    });
+        // إذا كانت الواجهة داخل مجلد public
+        if (fs.existsSync(path.join(__dirname, 'public', 'index.html'))) {
+            return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+        }
+        // إذا كانت الواجهة في المجلد الرئيسي
+        if (fs.existsSync(path.join(__dirname, 'index.html'))) {
+            return res.sendFile(path.join(__dirname, 'index.html'));
+        }
+
+        res.send("لم نتمكن من العثور على ملف الواجهة index.html أو index.ejs");
+    } catch (err) {
+        res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    }
 });
 
-// === 4. API المنتجات لمتجر dzShop ===
+// ==========================================
+// === 2. API المنتجات لمتجر dzShop ===
+// ==========================================
 app.get('/api/get-store-products', async (req, res) => {
     try {
-        const products = await productsCollection.find({}).toArray();
+        const products = productsCollection ? await productsCollection.find({}).toArray() : [];
         res.json(products || []);
     } catch (e) {
         res.json([]);
     }
 });
 
-// === 5. إضافة منتج جديد ===
+// إضافة منتج جديد
 app.post('/api/products', async (req, res) => {
     try {
         const products = await productsCollection.find({}).toArray();
@@ -68,7 +93,9 @@ app.post('/api/products', async (req, res) => {
     } catch (e) { res.redirect('/'); }
 });
 
-// === 6. استقبال الطلبات وخصم المخزون ===
+// ==========================================
+// === 3. استقبال الطلبات وخصم المخزون ===
+// ==========================================
 app.post('/api/leads', async (req, res) => {
     try {
         const leads = await leadsCollection.find({}).toArray();
@@ -98,5 +125,5 @@ app.post('/api/leads/update/:id', async (req, res) => {
     } catch (e) { res.redirect('/'); }
 });
 
-// === تشغيل السيرفر ===
+// تشغيل السيرفر
 app.listen(PORT, () => console.log(`🚀 السيرفر يعمل على بورت ${PORT}`));
