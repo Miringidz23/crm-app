@@ -8,11 +8,12 @@ const { MongoClient } = require('mongodb');
 const MONGO_URI = process.env.MONGO_URI;
 const client = new MongoClient(MONGO_URI);
 let leadsCollection;
-
+let productsCollection;
 async function connectDB() {
   await client.connect();
   const db = client.db('crmapp');
   leadsCollection = db.collection('leads');
+  productsCollection = db.collection('Products');
   console.log('✅ متصل بقاعدة بيانات MongoDB');
 }
 
