@@ -136,20 +136,7 @@ async function saveLeads(leads) {
   if (leads.length > 0) await leadsCollection.insertMany(leads);
 }
 
-function readProducts() {
-  const products = readData(PRODUCTS_FILE, [
-    { id: 1, name: "قميص رياضي POD", cost: 1200, price: 3500, initialStock: 60, stock: 4, soldQty: 56 },
-    { id: 2, name: "حقيبة ظهر رقمية", cost: 2000, price: 5500, initialStock: 30, stock: 20, soldQty: 10 }
-  ]);
-  
-  // تحديث البيانات القديمة إن وجد منتج بدون initialStock
-  return products.map(p => ({
-    ...p,
-    initialStock: p.initialStock !== undefined ? p.initialStock : (p.stock || 0),
-    soldQty: p.soldQty !== undefined ? p.soldQty : 0
-  }));
-}
-function saveProducts(products) { saveData(PRODUCTS_FILE, products); }
+
 
 function formatPhoneForWA(phone) {
   let clean = (phone || '').toString().replace(/\D/g, '');
@@ -159,60 +146,69 @@ function formatPhoneForWA(phone) {
   return clean;
 }
 
-// === إضافة منتج للمتجر (النسخة الصحيحة) ===
-app.post('/api/products', (req, res) => {
-    try {
-        const products = readProducts();
-        const { name, price, oldPrice, category, image, stock, cost } = req.body;
-        
-        const newProduct = {
-            id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
-            name: name,
-            price: Number(price) || 0,
-            oldPrice: Number(oldPrice) || 0,
-            cost: Number(cost) || 0,
-            category: category || 'عام',
-            image: image || '',
-            stock: Number(stock) || 0,
-            soldQty: 0,
-            initialStock: Number(stock) || 0
-        };
-
-        products.unshift(newProduct);
-        saveProducts(products);
-        
-        res.json({ success: true, product: newProduct });
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ success: false, error: e.message });
-    }
-});
-
-// === API لجلب المنتجات للمتجر ===
-app.get('/api/get-store-products', (req, res) => {
-    res.json(readProducts());
-});
-
-// === إعادة تزويد المخزون (تزويد شحنة جديدة) ===
-app.post('/api/products/restock/:id', (req, res) => {
-  const products = readProducts();
-  const id = parseInt(req.params.id);
-  const addStock = parseInt(req.body.addStock) || 0;
-  const product = products.find(p => p.id === id);
-  if (product && addStock > 0) {
-    product.initialStock = (product.initialStock || 0) + addStock;
-    product.stock = (product.stock || 0) + addStock;
-    saveProducts(products);
+// === جلب المنتجات للمتجر من MongoDB ===
+app.get('/api/get-store-products', async (req, res) => {
+  try {
+    const products = await productsCollection.find({}).toArray();
+    res.json(products);
+  } catch (e) {
+    res.status(500).json({ error: "فشل في جلب البيانات من القاعدة" });
   }
-  res.redirect('/');
 });
 
-// === حذف منتج ===
-app.post('/api/products/delete/:id', (req, res) => {
-  let products = readProducts();
-  products = products.filter(p => p.id !== parseInt(req.params.id));
-  saveProducts(products);
-  res.redirect('/');
+// === إضافة منتج جديد وحفظه في MongoDB ===
+app.post('/api/products', async (req, res) => {
+  try {
+    const { name, price, oldPrice, category, image, stock, cost } = req.body;
+    const products = await productsCollection.find({}).toArray();
+    
+    // توليد ID تلقائي
+    const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
+
+    const newProduct = {
+      id: newId,
+      name,
+      price: Number(price) || 0,
+      oldPrice: Number(oldPrice) || 0,
+      cost: Number(cost) || 0,
+      category: category || 'عام',
+      image: image || '',
+      stock: Number(stock) || 0,
+      soldQty: 0,
+      initialStock: Number(stock) || 0
+    };
+
+    await productsCollection.insertOne(newProduct);
+    res.json({ success: true, product: newProduct });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// === إعادة تزويد المخزون في MongoDB ===
+app.post('/api/products/restock/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const addStock = parseInt(req.body.addStock) || 0;
+    await productsCollection.updateOne(
+      { id: id },
+      { $inc: { stock: addStock, initialStock: addStock } }
+    );
+    res.redirect('/');
+  } catch (e) {
+    res.redirect('/');
+  }
+});
+
+// === حذف منتج من MongoDB ===
+app.post('/api/products/delete/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await productsCollection.deleteOne({ id: id });
+    res.redirect('/');
+  } catch (e) {
+    res.redirect('/');
+  }
 });
 
 // === إضافة زبون وطلب ===
